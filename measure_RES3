@@ -103,37 +103,34 @@ double fmeasure_res()
     digitalWrite(Sel_Res_Mux_Switch_Pin[1], i & 0b0010);
     digitalWrite(Sel_Res_Mux_Switch_Pin[2], i & 0b0100);
     digitalWrite(Sel_Res_Mux_Switch_Pin[3], i & 0b1000);
-    delay( (i-9) * 300);
+    
+    delay(Sel_Res[i-10]/300 + 200);  // 스위칭 후 전압안정화 시간 필요
     
     int temp = analogRead(A0);
     
     buffer= temp * Vin;
     Vout= (buffer)/1024.0;
-    buffer= (Vin/Vout) -1;
-    Sens_Res[i-10]= Sel_Res[i-10] * buffer;
+    buffer= Vin/Vout;
+    Sens_Res[i-10]= Sel_Res[i-10] * (buffer-1) + buffer * 9.5 - 28.5;
     
+    if ( (Sens_Res[i-10] > (Sel_Res[i-10]*36.4/200) ) && (Sens_Res[i-10] < (Sel_Res[i-10]*36.4/20)) ){
+      Serial.print(Sel_Res[i-10]);
+      Serial.print(",   ");
+      Serial.print("\t");
+      Serial.println(Sens_Res[i-10], 0);
+      return Sens_Res[i-10];
+    }
   }
-  
   if (Sens_Res[0] < 5) {
     Serial.println("short");
     return 0;
   }
-  else if (Sens_Res[5] > 5000000) {
+  else if (Sens_Res[5] > 3000000) {
     Serial.println("open");
-    return -1;
+    return 1;
   }
-  else {
-    for(int i=0; i<6; i++){
-      if ( (Sens_Res[i] > (Sel_Res[i]*36.4/200) ) && (Sens_Res[i] < (Sel_Res[i]*36.4/20)) ){
-        Serial.print(Sel_Res[i]);
-        Serial.print(",   ");
-        Serial.print("\t");
-        Serial.println(Sens_Res[i], 0);
-        return Sens_Res[i];
-      }
-    }
-  }
-
+  Serial.println("fail");
+  return 2;
 //    Serial.print("\t");
 //    for(int i=0; i<6; i++){
 //          Serial.print(Sens_Res[i], 0);
@@ -142,8 +139,7 @@ double fmeasure_res()
 //    
 //  Serial.println();
 //  return;
-
-} 
+}
 
 void fPin_Init()
 {  
