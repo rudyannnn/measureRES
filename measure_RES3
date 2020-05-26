@@ -1,3 +1,7 @@
+#include <core_build_options.h>
+#include <swRTC.h>
+
+swRTC rtc;  //클래스 개체 선언
 
 const int sensorPin = A7;    // select the input pin for the potentiometer
 const int ledPin = 13;      // select the pin for the LED
@@ -6,8 +10,9 @@ const int Mux_En_Pin[]={14,15,16,17,18,19, 22,23,24,25,26,27,28,29,30,31,32,33,3
 const int Input_Mux_Switch_Pin[]={53,52,2,3};
 const int Output_Mux_Switch_Pin[]={4,5,6,7};
 const int Sel_Res_Mux_Switch_Pin[]={8,9,10,11};
-//const int Sel_Res[]={2.2, 20, 2000, 20000, 200000, 2000000};
 const long Sel_Res[]={20, 200, 2000, 20000, 200000, 2000000};
+const long fromToRes[]={0, 124.9, 695.4, 6387.7, 63308.7, 632518.7, 9999999};
+const long offset_Res[]={-1, 0.1, 10.3, 52, 2130, 35000};
 float Sens_Res[]={0,0,0,0,0,0};
 
 #define Mux_Enable_Res_Pin 34
@@ -26,7 +31,7 @@ void fPin_Init();
 void setup() {
   Serial.begin(9600);
   
-  for(int i=0; i<18; i++){
+  for(int i=0; i<19; i++){
     pinMode(Mux_En_Pin[i], OUTPUT);}
   for(int i=0; i<4; i++){
     pinMode(Input_Mux_Switch_Pin[i], OUTPUT);}
@@ -38,21 +43,42 @@ void setup() {
   pinMode(Mux_Enable_Res_Pin, OUTPUT);
   pinMode(Target_ADC_Pin, INPUT);
   pinMode(LED_OKNG_Pin, OUTPUT);
-  fPin_Init();
-  digitalWrite(Mux_En_Pin[18], HIGH);
+  
+  rtc.stopRTC();            //정지
+  rtc.setTime(17, 00, 00);  //시, 분, 초
+  rtc.setDate(26, 5, 2020); //일, 월, 년
+  rtc.startRTC();           //시작
+  Serial.begin(9600);
 }
 
 void loop() {
   
+  
   Serial.println("SAP TP 접속 성능 평가");
+  Serial.print(rtc.getHours(), DEC);
+  Serial.print(":");
+  Serial.print(rtc.getMinutes(), DEC);
+  Serial.print(":");
+  Serial.print(rtc.getSeconds(), DEC);
+  Serial.print("\t"); 
+
+  Serial.print(rtc.getYear(), DEC);
+  Serial.print("/");
+  Serial.print(rtc.getMonth(), DEC);
+  Serial.print("/");
+  Serial.println(rtc.getDay(), DEC);
+  delay(1000);
+  
   double measure_res = 0;
 
-//  for(int i=0; i<3; i++)
-  for(int i=0; i<1; i++)
+  for(int i=0; i<3; i++)
+//  for(int i=1; i<2; i++)
   {
-//    for(int j=0; j<48; j++)
-    for(int j=0; j<6; j++)
+    for(int j=0; j<48; j++)
+//    for(int j=0; j<1; j++)
     {
+      fPin_Init();
+      digitalWrite(Mux_En_Pin[18], HIGH);
       fmux_sel(i,j);
       Serial.print("\t");
       Serial.print("CntNo : ");
@@ -103,32 +129,39 @@ double fmeasure_res()
     digitalWrite(Sel_Res_Mux_Switch_Pin[1], i & 0b0010);
     digitalWrite(Sel_Res_Mux_Switch_Pin[2], i & 0b0100);
     digitalWrite(Sel_Res_Mux_Switch_Pin[3], i & 0b1000);
-    
-    delay(Sel_Res[i-10]/300 + 200);  // 스위칭 후 전압안정화 시간 필요
-    
+
     int temp = analogRead(A0);
+    delay(100);
+        
+    while (temp != analogRead(A0)){  // 스위칭 후 전압안정화 시간 필요
+      temp = analogRead(A0);
+      delay(300);  
+    }
     
     buffer= temp * Vin;
     Vout= (buffer)/1024.0;
     buffer= Vin/Vout;
-    Sens_Res[i-10]= Sel_Res[i-10] * (buffer-1) + buffer * 9.5 - 28.5;
+    Sens_Res[i-10]= Sel_Res[i-10] * (buffer-1) + buffer * 11 - 33;
     
-    if ( (Sens_Res[i-10] > (Sel_Res[i-10]*36.4/200) ) && (Sens_Res[i-10] < (Sel_Res[i-10]*36.4/20)) ){
-      Serial.print(Sel_Res[i-10]);
-      Serial.print(",   ");
+    if ( (Sens_Res[i-10] > fromToRes[i-10]) && (Sens_Res[i-10] <= fromToRes[i-9]) ){
+//      Serial.print(Sel_Res[i-10]);
+//      Serial.print(",   ");
       Serial.print("\t");
-      Serial.println(Sens_Res[i-10], 0);
-      return Sens_Res[i-10];
+      Serial.println(Sens_Res[i-10]-offset_Res[i-10], 0);
+      return ( Sens_Res[i-10]-offset_Res[i-10] );
     }
   }
   if (Sens_Res[0] < 5) {
+    Serial.print("\t");
     Serial.println("short");
     return 0;
   }
   else if (Sens_Res[5] > 3000000) {
+    Serial.print("\t");
     Serial.println("open");
     return 1;
   }
+  Serial.print("\t");
   Serial.println("fail");
   return 2;
 //    Serial.print("\t");
@@ -143,7 +176,7 @@ double fmeasure_res()
 
 void fPin_Init()
 {  
-  for(int i=0; i<17; i++){
+  for(int i=0; i<19; i++){
     digitalWrite(Mux_En_Pin[i], LOW);}
   for(int i=0; i<5; i++){
     digitalWrite(Input_Mux_Switch_Pin[i], LOW);}
@@ -153,4 +186,5 @@ void fPin_Init()
     digitalWrite(Sel_Res_Mux_Switch_Pin[i], LOW);}
   digitalWrite(Mux_Enable_Res_Pin, LOW);
   digitalWrite(LED_OKNG_Pin, LOW);
+  return;
 }
